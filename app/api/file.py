@@ -4,7 +4,9 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ValidationError
 
-from app.core import logger
+from app.core import logger, config, ttl_cache
+
+from hashlib import sha256
 
 log = logger.get("api.file")
 router = APIRouter(prefix="/file", tags=["file"])
@@ -101,19 +103,30 @@ class DownloadUrlResponse(BaseModel):
 
 @router.api_route("/download", methods=["GET", "HEAD"])
 async def redirect_to_download_link(path: str, request: Request) -> RedirectResponse:
-    """Get download url for a file by file id from 115 service and redirect to it."""
+    """Get download url for a file by file id from 115 service and redirect to it.
+
+    Adds a link cache keyed by a hash of request path and User-Agent.
+    """
     try:
         from app.service import open115 as svc
     except Exception as e:  # pragma: no cover
         log.exception("Failed to import app.service.open115: %s", e)
         raise HTTPException(status_code=500, detail="Service unavailable")
 
+    # Build cache key from path and User-Agent
+    ua = request.headers.get("User-Agent") or ""
+    raw_key = f"{path}|{ua}"
+    key = sha256(raw_key.encode("utf-8")).hexdigest()
+
+    # Check cache first
+    cached = ttl_cache.get(key)
+    if cached:
+        return RedirectResponse(url=cached, status_code=302)
+
     info = await get_file_info(path)
     pick_code = info.pick_code
     try:
-        result = svc.get_download_url_by_pick_code(
-            pick_code, ua=request.headers.get("User-Agent")
-        )
+        result = svc.get_download_url_by_pick_code(pick_code, ua=ua)
     except Exception as e:
         log.error("Failed to get download url from upstream: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -132,6 +145,9 @@ async def redirect_to_download_link(path: str, request: Request) -> RedirectResp
         )
     res_data_key = list(res.data.keys())[0]
     download_url = res.data[res_data_key].url.url
+    
+    ttl_cache.set(key, download_url, config.link_cache_ttl_seconds)
+    log.info(f"Return download url for path {path}")
     return RedirectResponse(url=download_url, status_code=302)
 
 
@@ -160,23 +176,31 @@ class PlayUrlData(BaseModel):
     definition_list: dict[str, str]
     definition_list_new: dict[str, str]
     video_url: list[VideoUrlInfo]
-
+    
+class PlayUnavailable(BaseModel):
+    video_push_state: bool
 
 class PlayUrlResponse(BaseModel):
     state: bool
     message: str
     code: int
-    data: PlayUrlData | dict
+    data: PlayUrlData | PlayUnavailable | dict
 
 
 @router.api_route("/play", methods=["GET", "HEAD"])
-async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse:
+async def redirect_to_play_link(path: str) -> RedirectResponse:
     """Get play url for a file by file id from 115 service and redirect to it."""
     try:
         from app.service import open115 as svc
     except Exception as e:  # pragma: no cover
         log.exception("Failed to import app.service.open115: %s", e)
         raise HTTPException(status_code=500, detail="Service unavailable")
+
+    # try cache first
+    key = sha256(path.encode("utf-8")).hexdigest()
+    cached = ttl_cache.get(key)
+    if cached:
+        return RedirectResponse(url=cached, status_code=302)
 
     info = await get_file_info(path)
     pick_code = info.pick_code
@@ -198,6 +222,13 @@ async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse
                 "origin_response": result,
             },
         )
+    if isinstance(res.data, PlayUnavailable):
+        log.info(f"Play unavailable for path {path}")
+        raise HTTPException(status_code=403, detail="Play unavailable")
+
     video_url_info = res.data.video_url[-1]
-    log.info(f"Return video url with tag {video_url_info.title}")
-    return RedirectResponse(url=video_url_info.url, status_code=302)
+    video_url = video_url_info.url
+    
+    ttl_cache.set(key, video_url, config.link_cache_ttl_seconds)
+    log.info(f"Return video url with tag {video_url_info.title} for path {path}")
+    return RedirectResponse(url=video_url, status_code=302)
