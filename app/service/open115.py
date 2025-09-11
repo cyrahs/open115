@@ -244,3 +244,21 @@ def get_download_url_by_pick_code(pick_code: str, ua: str = None) -> str:
     res = httpx.post(url, headers=headers, data=body, timeout=5)
     res.raise_for_status()
     return res.json()
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+    reraise=True
+)
+def get_play_url_by_pick_code(pick_code: str, ua: str = None) -> str:
+    url = "https://proapi.115.com/open/video/play"
+    headers = {
+        "Authorization": f"Bearer {get_access_token()}"
+    }
+    params = {
+        "pick_code": pick_code,
+    }
+    res = httpx.get(url, headers=headers, params=params, timeout=5)
+    res.raise_for_status()
+    return res.json()

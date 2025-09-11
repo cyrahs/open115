@@ -133,3 +133,71 @@ async def redirect_to_download_link(path: str, request: Request) -> RedirectResp
     res_data_key = list(res.data.keys())[0]
     download_url = res.data[res_data_key].url.url
     return RedirectResponse(url=download_url, status_code=302)
+
+
+class VideoUrlInfo(BaseModel):
+    url: str
+    height: int
+    width: int
+    definition: int
+    title: str
+    definition_n: int
+
+
+class PlayUrlData(BaseModel):
+    file_id: str
+    parent_id: str
+    file_name: str
+    file_size: str
+    file_sha1: str
+    file_type: str
+    is_private: str
+    play_long: str
+    user_def: int
+    user_rotate: int
+    user_turn: int
+    multitrack_list: list = []
+    definition_list: dict[str, str]
+    definition_list_new: dict[str, str]
+    video_url: list[VideoUrlInfo]
+
+
+class PlayUrlResponse(BaseModel):
+    state: bool
+    message: str
+    code: int
+    data: PlayUrlData | dict
+
+
+@router.api_route("/play", methods=["GET", "HEAD"])
+async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse:
+    """Get play url for a file by file id from 115 service and redirect to it."""
+    try:
+        from app.service import open115 as svc
+    except Exception as e:  # pragma: no cover
+        log.exception("Failed to import app.service.open115: %s", e)
+        raise HTTPException(status_code=500, detail="Service unavailable")
+
+    info = await get_file_info(path)
+    pick_code = info.pick_code
+    try:
+        result = svc.get_play_url_by_pick_code(pick_code)
+    except Exception as e:
+        log.error("Failed to get play url from upstream: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    try:
+        res = PlayUrlResponse.model_validate(result)
+    except ValidationError as e:
+        log.exception(
+            "Failed to get play url (upstream response validation error): %s", e
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": f"Invalid upstream response: {e}",
+                "origin_response": result,
+            },
+        )
+    video_url_info = res.data.video_url[-1]
+    log.info(f"Return video url with tag {video_url_info.title}")
+    return RedirectResponse(url=video_url_info.url, status_code=302)
