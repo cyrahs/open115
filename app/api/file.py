@@ -101,11 +101,10 @@ class DownloadUrlResponse(BaseModel):
     data: dict[str, DownloadUrlInfo] | list
 
 
-@router.api_route("/download", methods=["GET", "HEAD"])
-async def redirect_to_download_link(path: str, request: Request) -> RedirectResponse:
-    """Get download url for a file by file id from 115 service and redirect to it.
+async def _resolve_download_url(path: str, request: Request) -> str:
+    """Resolve the direct download URL for a given path, with UA-aware caching.
 
-    Adds a link cache keyed by a hash of request path and User-Agent.
+    Returns the URL as a string. Raises HTTPException on error.
     """
     try:
         from app.service import open115 as svc
@@ -121,7 +120,7 @@ async def redirect_to_download_link(path: str, request: Request) -> RedirectResp
     # Check cache first
     cached = ttl_cache.get(key)
     if cached:
-        return RedirectResponse(url=cached, status_code=302)
+        return cached
 
     info = await get_file_info(path)
     pick_code = info.pick_code
@@ -145,8 +144,18 @@ async def redirect_to_download_link(path: str, request: Request) -> RedirectResp
         )
     res_data_key = list(res.data.keys())[0]
     download_url = res.data[res_data_key].url.url
-    
+
     ttl_cache.set(key, download_url, config.link_cache_ttl_seconds)
+    return download_url
+
+
+@router.api_route("/download", methods=["GET", "HEAD"])
+async def redirect_to_download_link(path: str, request: Request) -> RedirectResponse:
+    """Get download url for a file by file id from 115 service and redirect to it.
+
+    Adds a link cache keyed by a hash of request path and User-Agent.
+    """
+    download_url = await _resolve_download_url(path, request)
     log.info(f"Return download url for path {path}")
     return RedirectResponse(url=download_url, status_code=302)
 
@@ -188,15 +197,18 @@ class PlayUrlResponse(BaseModel):
 
 
 @router.api_route("/play", methods=["GET", "HEAD"])
-async def redirect_to_play_link(path: str) -> RedirectResponse:
-    """Get play url for a file by file id from 115 service and redirect to it."""
+async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse:
+    """Get play url for a file by file id from 115 service and redirect to it.
+
+    If the play URL is unavailable, fall back to the direct download URL.
+    """
     try:
         from app.service import open115 as svc
     except Exception as e:  # pragma: no cover
         log.exception("Failed to import app.service.open115: %s", e)
         raise HTTPException(status_code=500, detail="Service unavailable")
 
-    # try cache first
+    # try cache first (play cache is path-only)
     key = sha256(path.encode("utf-8")).hexdigest()
     cached = ttl_cache.get(key)
     if cached:
@@ -222,13 +234,19 @@ async def redirect_to_play_link(path: str) -> RedirectResponse:
                 "origin_response": result,
             },
         )
-    if isinstance(res.data, PlayUnavailable):
-        log.info(f"Play unavailable for path {path}")
-        raise HTTPException(status_code=403, detail="Play unavailable")
 
+    # If play is unavailable -> fall back to direct download URL
+    if isinstance(res.data, PlayUnavailable):
+        log.info(f"Play unavailable for path {path}; falling back to download URL")
+        download_url = await _resolve_download_url(path, request)
+        # Cache play key with the download URL too, to speed up subsequent /play hits
+        ttl_cache.set(key, download_url, config.link_cache_ttl_seconds)
+        return RedirectResponse(url=download_url, status_code=302)
+
+    # Otherwise, normal play flow
     video_url_info = res.data.video_url[-1]
     video_url = video_url_info.url
-    
+
     ttl_cache.set(key, video_url, config.link_cache_ttl_seconds)
     log.info(f"Return video url with tag {video_url_info.title} for path {path}")
     return RedirectResponse(url=video_url, status_code=302)
