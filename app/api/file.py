@@ -246,6 +246,8 @@ async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse
     # Otherwise, normal play flow
     video_url_info = res.data.video_url[-1]
     video_url = video_url_info.url
+    if video_url.startswith("http://"):
+        video_url = "https://" + video_url[len("http://") :]
 
     ttl_cache.set(key, video_url, config.link_cache_ttl_seconds)
     log.info(f"Return video url with tag {video_url_info.title} for path {path}")
