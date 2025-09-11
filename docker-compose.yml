@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  open115-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=INFO
+      - CF_ACCOUNT_ID=${CF_ACCOUNT_ID}
+      - CF_KV_ID=${CF_KV_ID}
+      - CF_API_TOKEN=${CF_API_TOKEN}
+    volumes:
+      - ./log:/app/log
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

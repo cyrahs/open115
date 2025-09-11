@@ -1,0 +1,11 @@
+[project]
+name = "open115"
+version = "0.0.1"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.116.1",
+    "pydantic-settings>=2.10.1",
+    "tenacity>=9.1.2",
+]
