@@ -170,20 +170,6 @@ class VideoUrlInfo(BaseModel):
 
 
 class PlayUrlData(BaseModel):
-    file_id: str
-    parent_id: str
-    file_name: str
-    file_size: str
-    file_sha1: str
-    file_type: str
-    is_private: str
-    play_long: str
-    user_def: int
-    user_rotate: int
-    user_turn: int
-    multitrack_list: list = []
-    definition_list: dict[str, str]
-    definition_list_new: dict[str, str]
     video_url: list[VideoUrlInfo]
     
 class PlayUnavailable(BaseModel):
