@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api import file as file_api
-from app.core import config
+from app.core import config, ttl_cache
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +14,13 @@ def reset_cache_ttl(monkeypatch):
     # Ensure a known TTL for tests; default 30 minutes
     monkeypatch.setattr(config, "link_cache_ttl_seconds", 1800)
     yield
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    ttl_cache.clear()
+    yield
+    ttl_cache.clear()
 
 
 def make_test_app() -> FastAPI:
@@ -76,11 +83,11 @@ def test_download_uses_cache_on_second_request(monkeypatch):
 
     from app.service import open115 as svc
 
-    def fake_get_file_info_by_path(path: str):
+    async def fake_get_file_info_by_path(path: str):
         counters["info"] += 1
         return _mock_file_info(path)
 
-    def fake_get_download_url_by_pick_code(pick_code: str, ua: str | None = None):
+    async def fake_get_download_url_by_pick_code(pick_code: str, ua: str | None = None):
         counters["download"] += 1
         return _mock_download_response("https://example.com/file.bin")
 
@@ -101,8 +108,7 @@ def test_download_uses_cache_on_second_request(monkeypatch):
     r2 = client.get("/file/download", params={"path": "/a/b.bin"}, headers=headers)
     assert r2.status_code == 302
     assert r2.headers["location"] == "https://example.com/file.bin"
-    # get_file_info_by_path is still called because the handler calls it before computing pick_code
-    # but our cache is before upstream download link call, so only download count should remain 1
+    assert counters["info"] == 1
     assert counters["download"] == 1
 
 
@@ -116,10 +122,10 @@ def test_download_cache_expires(monkeypatch):
     counters = {"download": 0}
     from app.service import open115 as svc
 
-    def fake_get_file_info_by_path(path: str):
+    async def fake_get_file_info_by_path(path: str):
         return _mock_file_info(path)
 
-    def fake_get_download_url_by_pick_code(pick_code: str, ua: str | None = None):
+    async def fake_get_download_url_by_pick_code(pick_code: str, ua: str | None = None):
         counters["download"] += 1
         # Return a URL that encodes the count, to observe changes across calls
         return _mock_download_response(f"https://example.com/file-{counters['download']}.bin")
@@ -144,4 +150,3 @@ def test_download_cache_expires(monkeypatch):
     r3 = client.get("/file/download", params={"path": "/expire.bin"}, headers=headers)
     assert r3.status_code == 302
     assert r3.headers["location"].endswith("file-2.bin")
-

@@ -1,21 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import file, magnet
-import uvicorn
 from contextlib import asynccontextmanager
+
+import uvicorn
+
+from app.api import file, magnet
 from app.service import open115 as open115_service
 
 # Lifespan to manage 115 tokens
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load access_token and expires_at on server start
-    open115_service.init_tokens()
-    # Start a background thread to refresh if expiring within 15 minutes; check every 10 minutes
-    open115_service.start_background_token_refresher(sleep_seconds=600, threshold_seconds=900)
+    # Ensure the token manager has populated the shared token store before serving traffic
+    await open115_service.ensure_tokens_ready()
     try:
         yield
     finally:
-        open115_service.stop_background_token_refresher()
+        await open115_service.shutdown()
 
 # Create FastAPI instance
 app = FastAPI(

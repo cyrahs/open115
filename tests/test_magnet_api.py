@@ -17,7 +17,7 @@ def client() -> TestClient:
 def test_add_magnets_categorizes_results(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.service import open115 as svc
 
-    def fake_add_magnets(magnets: list[str], dir_id: str) -> dict:
+    async def fake_add_magnets(magnets: list[str], dir_id: str) -> dict:
         return {
             "state": True,
             "message": "ok",
@@ -92,7 +92,7 @@ def test_add_magnets_categorizes_results(client: TestClient, monkeypatch: pytest
 def test_add_magnets_handles_upstream_error_state(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.service import open115 as svc
 
-    def fake_add_magnets(_: list[str], __: str) -> dict:
+    async def fake_add_magnets(_: list[str], __: str) -> dict:
         return {
             "state": False,
             "message": "bad upstream",
@@ -117,7 +117,7 @@ def test_add_magnets_handles_upstream_error_state(client: TestClient, monkeypatc
 def test_add_magnets_invalid_upstream_schema(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.service import open115 as svc
 
-    def fake_add_magnets(_: list[str], __: str) -> dict:
+    async def fake_add_magnets(_: list[str], __: str) -> dict:
         # Missing required fields to trigger validation failure
         return {
             "state": True,
@@ -145,7 +145,7 @@ def test_add_magnets_invalid_upstream_schema(client: TestClient, monkeypatch: py
 def test_add_magnets_raises_when_service_fails(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.service import open115 as svc
 
-    def fake_add_magnets(_: list[str], __: str) -> dict:
+    async def fake_add_magnets(_: list[str], __: str) -> dict:
         raise RuntimeError("network down")
 
     monkeypatch.setattr(svc, "add_magnets", fake_add_magnets)

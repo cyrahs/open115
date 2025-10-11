@@ -24,11 +24,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Copy venv and application code
 COPY --from=builder /app/.venv .venv
 COPY app/ app/
+COPY entrypoint.sh /entrypoint.sh
+
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
 
 ENV PYTHONPATH=/app
 ENV LOG_LEVEL=INFO
+ENV APP_MODULE=app.main:app
+ENV UVICORN_WORKERS=auto
 
-
-CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/entrypoint.sh"]

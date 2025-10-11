@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from hashlib import sha256
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ValidationError
 
-from app.core import logger, config, ttl_cache
-
-from hashlib import sha256
+from app.core import config, logger, ttl_cache
 
 log = logger.get("api.file")
 router = APIRouter(prefix="/file", tags=["file"])
@@ -44,6 +44,21 @@ class PathInfo(BaseModel):
     iss: str | None = None
 
 
+def _download_cache_key(path: str, ua: str) -> str:
+    raw_key = f"download:{path}|{ua}"
+    return sha256(raw_key.encode("utf-8")).hexdigest()
+
+
+def _play_cache_key(path: str) -> str:
+    raw_key = f"play:{path}"
+    return sha256(raw_key.encode("utf-8")).hexdigest()
+
+
+def _file_info_cache_key(path: str) -> str:
+    raw_key = f"file-info:{path}"
+    return sha256(raw_key.encode("utf-8")).hexdigest()
+
+
 @router.get("/info")
 async def get_file_info(path: str) -> FileInfo:
     """Get file/folder info by path from 115 service."""
@@ -54,7 +69,7 @@ async def get_file_info(path: str) -> FileInfo:
         raise HTTPException(status_code=500, detail="Service unavailable")
 
     try:
-        res = svc.get_file_info_by_path(path)
+        res = await svc.get_file_info_by_path(path)
     except Exception as e:
         log.error("Failed to get file info from upstream: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -101,6 +116,16 @@ class DownloadUrlResponse(BaseModel):
     data: dict[str, DownloadUrlInfo] | list
 
 
+async def _get_file_info_cached(path: str) -> FileInfo:
+    cache_key = _file_info_cache_key(path)
+    cached = ttl_cache.get(cache_key)
+    if cached:
+        return cached
+    info = await get_file_info(path)
+    ttl_cache.set(cache_key, info, config.link_cache_ttl_seconds)
+    return info
+
+
 async def _resolve_download_url(path: str, request: Request) -> str:
     """Resolve the direct download URL for a given path, with UA-aware caching.
 
@@ -114,18 +139,18 @@ async def _resolve_download_url(path: str, request: Request) -> str:
 
     # Build cache key from path and User-Agent
     ua = request.headers.get("User-Agent") or ""
-    raw_key = f"{path}|{ua}"
-    key = sha256(raw_key.encode("utf-8")).hexdigest()
+    key = _download_cache_key(path, ua)
 
     # Check cache first
     cached = ttl_cache.get(key)
     if cached:
+        log.info("Cache hit for download url for path %s", path)
         return cached
 
-    info = await get_file_info(path)
+    info = await _get_file_info_cached(path)
     pick_code = info.pick_code
     try:
-        result = svc.get_download_url_by_pick_code(pick_code, ua=ua)
+        result = await svc.get_download_url_by_pick_code(pick_code, ua=ua)
     except Exception as e:
         log.error("Failed to get download url from upstream: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -171,7 +196,7 @@ class VideoUrlInfo(BaseModel):
 
 class PlayUrlData(BaseModel):
     video_url: list[VideoUrlInfo]
-    
+
 class PlayUnavailable(BaseModel):
     video_push_state: bool
 
@@ -195,15 +220,15 @@ async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse
         raise HTTPException(status_code=500, detail="Service unavailable")
 
     # try cache first (play cache is path-only)
-    key = sha256(path.encode("utf-8")).hexdigest()
+    key = _play_cache_key(path)
     cached = ttl_cache.get(key)
     if cached:
         return RedirectResponse(url=cached, status_code=302)
 
-    info = await get_file_info(path)
+    info = await _get_file_info_cached(path)
     pick_code = info.pick_code
     try:
-        result = svc.get_play_url_by_pick_code(pick_code)
+        result = await svc.get_play_url_by_pick_code(pick_code)
     except Exception as e:
         log.error("Failed to get play url from upstream: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

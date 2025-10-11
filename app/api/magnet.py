@@ -49,7 +49,7 @@ async def add_magnets(payload: MagnetsRequest) -> list[MagnetAddResponse]:
         raise HTTPException(status_code=500, detail="Service unavailable")
 
     try:
-        resj = svc.add_magnets(payload.magnets, payload.dir_id)
+        resj = await svc.add_magnets(payload.magnets, payload.dir_id)
         envelope = MagnetAddEnvelope.model_validate(resj)
     except ValidationError as e:
         log.exception("Failed to add magnets (upstream response validation error): %s", e)
