@@ -1,11 +1,12 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import file, magnet
 from app.service import open115 as open115_service
+
 
 # Lifespan to manage 115 tokens
 @asynccontextmanager

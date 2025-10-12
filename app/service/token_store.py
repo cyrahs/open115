@@ -6,7 +6,6 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from app.core import logger
 
@@ -77,7 +76,7 @@ class TokenStore:
             )
         log.debug("Token store updated; expires_at=%s", expires_at)
 
-    def get_tokens(self) -> Optional[TokenRecord]:
+    def get_tokens(self) -> TokenRecord | None:
         with self._lock:
             row = self._conn.execute(
                 "SELECT access_token, refresh_token, expires_at, updated_at FROM tokens WHERE id = 1"

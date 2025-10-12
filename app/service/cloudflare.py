@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Tuple
 
 import httpx
 from tenacity import (
@@ -87,7 +86,7 @@ async def put_kv_value(key: str, value: str) -> None:
             res.raise_for_status()
 
 
-async def fetch_tokens() -> Tuple[str, str, int]:
+async def fetch_tokens() -> tuple[str, str, int]:
     access_token, refresh_token, expires_at = await asyncio.gather(
         get_kv_value("115_access_token"),
         get_kv_value("115_refresh_token"),
@@ -104,7 +103,7 @@ async def persist_tokens(access_token: str, refresh_token: str, expires_at: int)
     )
 
 
-async def refresh_access_token(refresh_token: str) -> Tuple[str, str, int]:
+async def refresh_access_token(refresh_token: str) -> tuple[str, str, int]:
     url = "https://passportapi.115.com/open/refreshToken"
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",

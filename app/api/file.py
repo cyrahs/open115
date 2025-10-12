@@ -66,13 +66,13 @@ async def get_file_info(path: str) -> FileInfo:
         from app.service import open115 as svc
     except Exception as e:  # pragma: no cover
         log.exception("Failed to import app.service.open115: %s", e)
-        raise HTTPException(status_code=500, detail="Service unavailable")
+        raise HTTPException(status_code=500, detail="Service unavailable") from e
 
     try:
         res = await svc.get_file_info_by_path(path)
     except Exception as e:
         log.error("Failed to get file info from upstream: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
     try:
         res = FileInfoResponse.model_validate(res)
     except ValidationError as e:
@@ -85,7 +85,7 @@ async def get_file_info(path: str) -> FileInfo:
                 "error": f"Invalid upstream response: {e}",
                 "origin_response": res,
             },
-        )
+        ) from e
     if res.state is False:
         log.error(
             "Failed to get file info for path=%s: error from 115: %s", path, res.message
@@ -135,7 +135,7 @@ async def _resolve_download_url(path: str, request: Request) -> str:
         from app.service import open115 as svc
     except Exception as e:  # pragma: no cover
         log.exception("Failed to import app.service.open115: %s", e)
-        raise HTTPException(status_code=500, detail="Service unavailable")
+        raise HTTPException(status_code=500, detail="Service unavailable") from e
 
     # Build cache key from path and User-Agent
     ua = request.headers.get("User-Agent") or ""
@@ -153,7 +153,7 @@ async def _resolve_download_url(path: str, request: Request) -> str:
         result = await svc.get_download_url_by_pick_code(pick_code, ua=ua)
     except Exception as e:
         log.error("Failed to get download url from upstream: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
     try:
         res = DownloadUrlResponse.model_validate(result)
     except ValidationError as e:
@@ -166,7 +166,7 @@ async def _resolve_download_url(path: str, request: Request) -> str:
                 "error": f"Invalid upstream response: {e}",
                 "origin_response": result,
             },
-        )
+        ) from e
     res_data_key = list(res.data.keys())[0]
     download_url = res.data[res_data_key].url.url
 
@@ -217,7 +217,7 @@ async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse
         from app.service import open115 as svc
     except Exception as e:  # pragma: no cover
         log.exception("Failed to import app.service.open115: %s", e)
-        raise HTTPException(status_code=500, detail="Service unavailable")
+        raise HTTPException(status_code=500, detail="Service unavailable") from e
 
     # try cache first (play cache is path-only)
     key = _play_cache_key(path)
@@ -231,7 +231,7 @@ async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse
         result = await svc.get_play_url_by_pick_code(pick_code)
     except Exception as e:
         log.error("Failed to get play url from upstream: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
     try:
         res = PlayUrlResponse.model_validate(result)
     except ValidationError as e:
@@ -244,7 +244,7 @@ async def redirect_to_play_link(path: str, request: Request) -> RedirectResponse
                 "error": f"Invalid upstream response: {e}",
                 "origin_response": result,
             },
-        )
+        ) from e
 
     # If play is unavailable -> fall back to direct download URL
     if isinstance(res.data, PlayUnavailable):

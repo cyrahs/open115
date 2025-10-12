@@ -26,6 +26,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.uv_cache/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -137,3 +138,6 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Linter
+.ruff_cache/

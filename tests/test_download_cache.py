@@ -1,5 +1,5 @@
 import time
-from typing import Dict, Any
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -29,7 +29,7 @@ def make_test_app() -> FastAPI:
     return app
 
 
-def _mock_file_info(path: str) -> Dict[str, Any]:
+def _mock_file_info(path: str) -> dict[str, Any]:
     # Minimal valid structure matching FileInfoResponse
     return {
         "state": True,
@@ -56,7 +56,7 @@ def _mock_file_info(path: str) -> Dict[str, Any]:
     }
 
 
-def _mock_download_response(url: str) -> Dict[str, Any]:
+def _mock_download_response(url: str) -> dict[str, Any]:
     return {
         "state": True,
         "message": "ok",

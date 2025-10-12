@@ -4,7 +4,6 @@ import asyncio
 import os
 import threading
 import time
-from typing import Optional
 
 import httpx
 from tenacity import (
@@ -20,13 +19,13 @@ from app.service.token_store import TokenRecord, token_store
 log = logger.get("open115_service")
 
 _client_lock = asyncio.Lock()
-_client: Optional[httpx.AsyncClient] = None
+_client: httpx.AsyncClient | None = None
 
 HTTP_TIMEOUT = httpx.Timeout(connect=5.0, read=10.0, write=10.0, pool=5.0)
 HTTP_LIMITS = httpx.Limits(max_connections=20, max_keepalive_connections=10)
 
 _cache_lock = threading.RLock()
-_cached_record: Optional[TokenRecord] = None
+_cached_record: TokenRecord | None = None
 _REFRESH_THRESHOLD_SECONDS = int(os.getenv("OPEN115_REFRESH_THRESHOLD", "900"))
 
 _RETRY_KWARGS = dict(

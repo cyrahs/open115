@@ -1,5 +1,5 @@
 # Builder
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.13-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -8,12 +8,16 @@ WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml uv.lock ./
 
 RUN uv sync --frozen --no-dev
 
 # Runner
-FROM python:3.12-slim-bookworm AS runner
+FROM python:3.13-slim-bookworm AS runner
 
 WORKDIR /app
 

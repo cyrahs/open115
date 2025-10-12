@@ -6,7 +6,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from app.core import logger
 
@@ -52,7 +52,7 @@ class SQLiteTTLCache:
                 """
             )
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         now = time.time()
         with self._lock:
             row = self._conn.execute(

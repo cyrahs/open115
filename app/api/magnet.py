@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, ConfigDict, ValidationError
 from typing import Literal
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core import logger
 
@@ -46,7 +47,7 @@ async def add_magnets(payload: MagnetsRequest) -> list[MagnetAddResponse]:
         from app.service import open115 as svc
     except Exception as e:  # pragma: no cover - import-time failure surfaced as 500
         log.exception("Failed to import app.service.open115: %s", e)
-        raise HTTPException(status_code=500, detail="Service unavailable")
+        raise HTTPException(status_code=500, detail="Service unavailable") from e
 
     try:
         resj = await svc.add_magnets(payload.magnets, payload.dir_id)
@@ -59,11 +60,11 @@ async def add_magnets(payload: MagnetsRequest) -> list[MagnetAddResponse]:
                 "error": f"Invalid upstream response: {e}",
                 "origin_response": resj,
             }
-        )
+        ) from e
     except Exception as e:
         # Network-level or unexpected service errors or schema validation errors
         log.exception("Failed to add magnets (request/validation error): %s", e)
-        raise HTTPException(status_code=502, detail=f"Upstream request failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Upstream request failed: {e}") from e
     if envelope.state is False:
         log.error("Failed to add magnets (error from 115): %s", envelope.message)
         raise HTTPException(status_code=500, detail=envelope.message)

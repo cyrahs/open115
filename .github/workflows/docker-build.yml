@@ -22,6 +22,37 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Read project version
+      id: project_version
+      run: |
+        python3 - <<'PY'
+        import os
+
+        version = None
+        in_project = False
+        with open("pyproject.toml", "r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.startswith("[") and line.endswith("]"):
+                    in_project = line == "[project]"
+                    continue
+                if in_project and line.startswith("version"):
+                    _, value = line.split("=", 1)
+                    value = value.split("#", 1)[0].strip()
+                    version = value.strip('"').strip("'")
+                    break
+
+        if not version:
+            raise SystemExit("Unable to locate project version in pyproject.toml")
+
+        sanitized = version.replace("+", "-")
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write(f"version={sanitized}\n")
+        print(f"Detected project version {sanitized}")
+        PY
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -40,9 +71,10 @@ jobs:
         tags: |
           type=ref,event=branch
           type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=${{ steps.project_version.outputs.version }}
           type=raw,value=latest,enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.version=${{ steps.project_version.outputs.version }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5

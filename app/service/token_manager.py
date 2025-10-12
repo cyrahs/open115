@@ -5,7 +5,6 @@ import os
 import signal
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
 
 try:
     import fcntl  # type: ignore
@@ -13,7 +12,7 @@ except ImportError:  # pragma: no cover - Windows fallback
     fcntl = None  # type: ignore
 
 from app.core import logger
-from app.service import cloudflare, open115
+from app.service import cloudflare
 from app.service.token_store import TokenRecord, token_store
 
 log = logger.get("token_manager")
@@ -36,10 +35,10 @@ async def _acquire_manager_lock():
         try:
             await loop.run_in_executor(None, fcntl.flock, fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             acquired = True
-        except BlockingIOError:
+        except BlockingIOError as e:
             log.info("Token manager lock already held; assuming another manager is running")
             os.close(fd)
-            raise RuntimeError("manager-already-running")
+            raise RuntimeError("manager-already-running") from e
         try:
             yield fd
         finally:
@@ -84,7 +83,7 @@ async def _refresh_cycle(stop_event: asyncio.Event) -> None:
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=seconds_until_refresh)
             break
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
         record = token_store.get_tokens()
@@ -96,7 +95,9 @@ async def _refresh_cycle(stop_event: asyncio.Event) -> None:
             continue
 
         try:
-            access, refresh, expires_at = await cloudflare.refresh_access_token(record.refresh_token)
+            access, refresh, expires_at = await cloudflare.refresh_access_token(
+                record.refresh_token
+            )
         except Exception as exc:  # pragma: no cover - log and retry
             log.exception("Token refresh failed; retrying soon: %s", exc)
             await asyncio.sleep(SLEEP_MIN_SECONDS)
