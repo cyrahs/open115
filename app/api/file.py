@@ -175,11 +175,13 @@ async def _resolve_download_url(path: str, request: Request) -> str:
 
 
 @router.api_route("/download", methods=["GET", "HEAD"])
-async def redirect_to_download_link(path: str, request: Request) -> RedirectResponse:
+async def redirect_to_download_link(path: str, request: Request, proxy: bool = False,) -> RedirectResponse:
     """Get download url for a file by file id from 115 service and redirect to it.
 
     Adds a link cache keyed by a hash of request path and User-Agent.
     """
+    if proxy:
+        return RedirectResponse(url=f"https://open115-proxy.s117.me/file/download?path={path}", status_code=302)
     download_url = await _resolve_download_url(path, request)
     log.info(f"Return download url for path {path}")
     return RedirectResponse(url=download_url, status_code=302)
