@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     cf_kv_id: str
     cf_api_token: str
     
+    # proxy_115cdn
+    proxy_115cdn_host: str = '115cdn.s117.me'
+    
     model_config = SettingsConfigDict(env_file='.env')
 
 

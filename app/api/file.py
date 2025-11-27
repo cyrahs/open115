@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from urllib.parse import urlparse, urlunparse
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -180,9 +181,11 @@ async def redirect_to_download_link(path: str, request: Request, proxy: bool = F
 
     Adds a link cache keyed by a hash of request path and User-Agent.
     """
-    if proxy:
-        return RedirectResponse(url=f"https://open115-proxy.s117.me/file/download?path={path}", status_code=302)
     download_url = await _resolve_download_url(path, request)
+    if proxy:
+        parsed = urlparse(download_url)
+        proxy_download_url = urlunparse(parsed._replace(netloc=config.proxy_115cdn_host))
+        return RedirectResponse(url=proxy_download_url, status_code=302)
     log.info(f"Return download url for path {path}")
     return RedirectResponse(url=download_url, status_code=302)
 
